@@ -1,11 +1,11 @@
 {
   "expo": {
     "name": "Global-311",
+    "scheme": "Global 311",
     "slug": "Global-311",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "myapp",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
