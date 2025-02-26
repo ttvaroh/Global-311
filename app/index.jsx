@@ -4,7 +4,7 @@ import { View, Text, Image, ScrollView } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { images } from "../constants";
-import CustomButton from "@/components/CustomButton";
+import { CustomButton, Loader } from "../components";
 import { useGlobalContext } from "../context/GlobalProvider";
 
 const Welcome = () => {
@@ -14,10 +14,12 @@ const Welcome = () => {
 
   return (
     <SafeAreaView className="bg-primary h-full">
-      {/* <Loader isLoading={loading} /> */}
+      <Loader isLoading={loading} />
 
       <ScrollView
-        contentContainerStyle={{ height: "100%" }}
+        contentContainerStyle={{
+          height: "100%",
+        }}
       >
         <View className="w-full flex justify-center items-center h-full px-4">
           <Image

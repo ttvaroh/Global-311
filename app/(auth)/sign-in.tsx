@@ -6,11 +6,11 @@ import { View, Text, ScrollView, Dimensions, Alert, Image } from "react-native";
 import { images } from "../../constants";
 import CustomButton from "@/components/CustomButton";
 import FormField from "@/components/FormField";
-// import { getCurrentUser, signIn } from "../../lib/appwrite";
-// import { useGlobalContext } from "../../context/GlobalProvider";
+import { getCurrentUser, signIn } from '../../lib/appwrite'
+import { useGlobalContext } from "../../context/GlobalProvider";
 
 const SignIn = () => {
-  // const { setUser, setIsLogged } = useGlobalContext();
+  const { setUser, setIsLogged } = useGlobalContext();
   const [isSubmitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({
     email: "",
@@ -18,25 +18,25 @@ const SignIn = () => {
   });
 
   const submit = async () => {
-    // if (form.email === "" || form.password === "") {
-    //   Alert.alert("Error", "Please fill in all fields");
-    // }
+    if (form.email === "" || form.password === "") {
+      Alert.alert("Error", "Please fill in all fields");
+    }
 
-    // setSubmitting(true);
+    setSubmitting(true);
 
-    // try {
-    //   await signIn(form.email, form.password);
-    //   const result = await getCurrentUser();
-    //   setUser(result);
-    //   setIsLogged(true);
+    try {
+        await signIn(form.email, form.password);
+        const result = await getCurrentUser();
+        setUser(result);
+        setIsLogged(true);
 
-    //   Alert.alert("Success", "User signed in successfully");
-    //   router.replace("/home");
-    // } catch (error) {
-    //   Alert.alert("Error", error.message);
-    // } finally {
-    //   setSubmitting(false);
-    // }
+        Alert.alert("Success", "User signed in successfully");
+        router.replace("/home");
+    } catch (error) {
+        Alert.alert("Error", error.message);
+    } finally {
+        setSubmitting(false);
+    }
   };
 
   return (
@@ -64,6 +64,7 @@ const SignIn = () => {
             handleChangeText={(e) => setForm({ ...form, email: e })}
             otherStyles="mt-7"
             keyboardType="email-address"
+            placeholder="aora@gmail.com"
           />
 
           <FormField
@@ -71,6 +72,7 @@ const SignIn = () => {
             value={form.password}
             handleChangeText={(e) => setForm({ ...form, password: e })}
             otherStyles="mt-7"
+            placeholder='Password'
           />
 
           <CustomButton
@@ -78,6 +80,7 @@ const SignIn = () => {
             handlePress={submit}
             containerStyles="mt-7"
             isLoading={isSubmitting}
+            textStyles=''
           />
 
           <View className="flex justify-center pt-5 flex-row gap-2">
