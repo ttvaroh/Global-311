@@ -8,7 +8,11 @@ import { useGlobalContext } from "../../context/GlobalProvider";
 
 const TabIcon = ({ icon, color, name, focused }) => {
   return (
-    <View className="flex items-center justify-center gap-2">
+    <View
+      className={`flex items-center justify-center gap-2 ${
+        focused ? "mt-2" : "mt-4"
+      }`}
+    >
       <Image
         source={icon}
         resizeMode="contain"
@@ -43,7 +47,7 @@ const TabLayout = () => {
             backgroundColor: "#161622",
             borderTopWidth: 1,
             borderTopColor: "#232533",
-            height: 84,
+            height: 80,
           },
         }}
       >
@@ -63,15 +67,15 @@ const TabLayout = () => {
           }}
         />
         <Tabs.Screen
-          name="bookmark"
+          name="maptest"
           options={{
-            title: "Bookmark",
+            title: "MapTest",
             headerShown: false,
             tabBarIcon: ({ color, focused }) => (
               <TabIcon
                 icon={icons.bookmark}
                 color={color}
-                name="Bookmark"
+                name="MapTest"
                 focused={focused}
               />
             ),
