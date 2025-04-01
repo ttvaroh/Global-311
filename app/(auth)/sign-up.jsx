@@ -78,6 +78,13 @@ const SignUp = () => {
             otherStyles="mt-7"
           />
 
+          <FormField
+            title="Location"
+            value={form.address}
+            handleChangeText={(e) => setForm({ ...form, address: e })}
+            otherStyles="mt-7"
+          />
+
           <CustomButton
             title="Sign Up"
             handlePress={submit}
