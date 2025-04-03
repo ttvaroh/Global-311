@@ -6,8 +6,8 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  StyleSheet,
 } from "react-native";
+import {} from "nativewind";
 import MapView, { Marker, Callout } from "react-native-maps";
 import { mapService } from "../lib/appwrite";
 import { icons } from "../constants";
@@ -96,6 +96,36 @@ const MapScreen = ({
     setAddModalVisible(true);
   };
 
+  const handleAddressSubmit = async () => {
+    if (!address.trim()) {
+      Alert.alert("Error", "Please enter an address");
+      return;
+    }
+
+    Keyboard.dismiss();
+    setLoading(true);
+
+    try {
+      // Geocode the address
+      const results = await Location.geocodeAsync(address);
+
+      if (results.length > 0) {
+        setNewPinCoords({
+          ...newPinCoords,
+          latitude: results[0].latitude,
+          longitude: results[0].longitude,
+        });
+      } else {
+        Alert.alert("Not Found", "Could not find the location you entered");
+      }
+    } catch (error) {
+      console.log("Error geocoding address:", error);
+      Alert.alert("Error", "Failed to search for this address");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Add a new pin to the database
   const handleAddPin = async () => {
     if (!newPinCoords) return;
@@ -131,12 +161,9 @@ const MapScreen = ({
 
   // Check if current user has already approved this pin
   const hasUserApproved = (pin) => {
-    return currentUser && pin.approvals.includes(currentUser.$id);
-  };
-
-  // Check if current user has already declined this pin
-  const hasUserDeclined = (pin) => {
-    return currentUser && pin.declines.includes(currentUser.$id);
+    return (
+      currentUser && pin.approvals && pin.approvals.includes(currentUser.$id)
+    );
   };
 
   // Handle pin approval
@@ -150,20 +177,6 @@ const MapScreen = ({
       setSelectedPin(updatedPin);
     } catch (error) {
       Alert.alert("Error", error.message || "Failed to approve pin");
-    }
-  };
-
-  // Handle pin decline
-  const handleDeclinePin = async () => {
-    if (!selectedPin || !currentUser) return;
-
-    try {
-      await mapService.declinePin(selectedPin.$id);
-      const updatedPins = await fetchPins();
-      const updatedPin = updatedPins.find((p) => p.$id === selectedPin.$id);
-      setSelectedPin(updatedPin);
-    } catch (error) {
-      Alert.alert("Error", error.message || "Failed to decline pin");
     }
   };
 
@@ -230,8 +243,14 @@ const MapScreen = ({
     }
   };
 
+  // Format status text safely with null/undefined check
+  const formatStatus = (status) => {
+    if (!status) return "Unknown";
+    return status.charAt(0).toUpperCase() + status.slice(1);
+  };
+
   return (
-    <View style={{ flex: 1 }}>
+    <View className="flex-1">
       <MapView
         ref={mapRef}
         style={{ width: "100%", height: "100%" }}
@@ -268,18 +287,18 @@ const MapScreen = ({
             onCalloutPress={() => showPinDetails(pin)}
           >
             <Callout tooltip>
-              <View style={styles.callout}>
-                <Text style={styles.calloutTitle}>{pin.title}</Text>
-                <Text style={styles.calloutDescription}>{pin.description}</Text>
-                <Text style={styles.calloutInfo}>
-                  Status:{" "}
-                  {pin.status.charAt(0).toUpperCase() + pin.status.slice(1)}
+              <View className="w-50 bg-white rounded-lg p-2.5 shadow-md">
+                <Text className="font-bold text-base mb-1">{pin.title}</Text>
+                <Text className="mb-1">{pin.description}</Text>
+                <Text className="text-xs text-gray-600">
+                  Status: {formatStatus(pin.status)}
                 </Text>
-                <Text style={styles.calloutInfo}>
-                  Approvals: {pin.approvals.length} | Declines:{" "}
-                  {pin.declines.length}
+                <Text className="text-xs text-gray-600">
+                  Approvals: {pin.approvals ? pin.approvals.length : 0}
                 </Text>
-                <Text style={styles.calloutAction}>Tap for more details</Text>
+                <Text className="mt-1 italic text-xs text-blue-500">
+                  Tap for more details
+                </Text>
               </View>
             </Callout>
           </Marker>
@@ -288,7 +307,7 @@ const MapScreen = ({
 
       {/* Loading indicator */}
       {loading && (
-        <View style={styles.loadingContainer}>
+        <View className="absolute top-2.5 self-center bg-white p-2.5 rounded shadow-md">
           <Text>Loading pins...</Text>
         </View>
       )}
@@ -300,38 +319,46 @@ const MapScreen = ({
         visible={addModalVisible}
         onRequestClose={() => setAddModalVisible(false)}
       >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Add New Pin</Text>
-
+        <View className="flex-1 justify-start items-center pt-60 bg-black/50">
+          <View className="bg-primary rounded-lg p-5 w-4/5 max-h-4/5 shadow-lg">
+            <Text className="text-lg font-bold mb-4 text-center text-white">
+              Add New Pin
+            </Text>
             <TextInput
-              style={styles.input}
+              className="border border-white rounded p-2.5 mb-4 text-white"
               placeholder="Pin Title"
+              placeholderTextColor="gray"
               value={pinTitle}
               onChangeText={setPinTitle}
             />
-
             <TextInput
-              style={[styles.input, styles.textArea]}
+              className="border border-white rounded p-2.5 mb-4 text-white"
+              placeholder="Address"
+              placeholderTextColor="gray"
+              value={newPinCoords}
+              onChangeText={setPinTitle}
+            />
+            <TextInput
+              className="border border-white rounded p-2.5 mb-4 h-24 text-white"
               placeholder="Pin Description"
+              placeholderTextColor="gray"
               value={pinDescription}
               onChangeText={setPinDescription}
               multiline
+              textAlignVertical="top"
             />
-
-            <View style={styles.buttonContainer}>
+            <View className="flex-row justify-between">
               <TouchableOpacity
-                style={[styles.button, styles.cancelButton]}
+                className="p-2.5 rounded bg-secondary w-5/12 items-center"
                 onPress={() => setAddModalVisible(false)}
               >
-                <Text style={styles.buttonText}>Cancel</Text>
+                <Text className="text-white font-bold">Cancel</Text>
               </TouchableOpacity>
-
               <TouchableOpacity
-                style={[styles.button, styles.addButton]}
+                className="p-2.5 rounded bg-secondary w-5/12 items-center"
                 onPress={handleAddPin}
               >
-                <Text style={styles.buttonText}>Add Pin</Text>
+                <Text className="text-white font-bold">Add Pin</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -346,93 +373,73 @@ const MapScreen = ({
           visible={detailModalVisible}
           onRequestClose={() => setDetailModalVisible(false)}
         >
-          <View style={styles.modalContainer}>
-            <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>{selectedPin.title}</Text>
-
-              <Text style={styles.detailLabel}>Description:</Text>
-              <Text style={styles.detailText}>{selectedPin.description}</Text>
-
-              <Text style={styles.detailLabel}>Status:</Text>
-              <Text style={styles.detailText}>
-                {selectedPin.status.charAt(0).toUpperCase() +
-                  selectedPin.status.slice(1)}
+          <View className="flex-1 justify-center items-center bg-black/50">
+            <View className="bg-white rounded-lg p-5 w-4/5 max-h-4/5 shadow-lg">
+              <Text className="text-lg font-bold mb-4 text-center">
+                {selectedPin.title}
               </Text>
 
-              <Text style={styles.detailLabel}>Verification:</Text>
-              <View style={styles.verificationContainer}>
-                <View style={styles.verificationItem}>
-                  <Text style={styles.verificationCount}>
-                    {selectedPin.approvals.length}
-                  </Text>
-                  <Text style={styles.verificationLabel}>Approvals</Text>
-                </View>
+              <Text className="font-bold mt-2.5 mb-1">Description:</Text>
+              <Text className="mb-2.5">{selectedPin.description}</Text>
 
-                <View style={styles.verificationItem}>
-                  <Text style={styles.verificationCount}>
-                    {selectedPin.declines.length}
+              <Text className="font-bold mt-2.5 mb-1">Status:</Text>
+              <Text className="mb-2.5">{formatStatus(selectedPin.status)}</Text>
+
+              <Text className="font-bold mt-2.5 mb-1">Verification:</Text>
+              <View className="flex-row justify-around my-2.5 p-2.5 bg-gray-100 rounded">
+                <View className="items-center">
+                  <Text className="text-xl font-bold">
+                    {selectedPin.approvals ? selectedPin.approvals.length : 0}
                   </Text>
-                  <Text style={styles.verificationLabel}>Declines</Text>
+                  <Text className="text-xs text-gray-600">People Agree</Text>
                 </View>
               </View>
 
               {/* Verification Actions */}
               {currentUser && currentUser.$id !== selectedPin.userId && (
-                <View style={styles.verificationActions}>
+                <View className="flex-row justify-between my-4">
                   <TouchableOpacity
-                    style={[
-                      styles.verifyButton,
-                      styles.approveButton,
-                      hasUserApproved(selectedPin) && styles.activeButton,
-                    ]}
+                    className={`p-2.5 rounded w-5/12 items-center ${
+                      hasUserApproved(selectedPin)
+                        ? "bg-green-500/60"
+                        : "bg-green-500"
+                    }`}
                     onPress={handleApprovePin}
                     disabled={hasUserApproved(selectedPin)}
                   >
-                    <Text style={styles.buttonText}>
-                      {hasUserApproved(selectedPin) ? "Approved" : "Approve"}
-                    </Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[
-                      styles.verifyButton,
-                      styles.declineButton,
-                      hasUserDeclined(selectedPin) && styles.activeButton,
-                    ]}
-                    onPress={handleDeclinePin}
-                    disabled={hasUserDeclined(selectedPin)}
-                  >
-                    <Text style={styles.buttonText}>
-                      {hasUserDeclined(selectedPin) ? "Declined" : "Decline"}
+                    <Text className="text-white font-bold">
+                      {hasUserApproved(selectedPin)
+                        ? "Approved"
+                        : "Still There"}
                     </Text>
                   </TouchableOpacity>
                 </View>
               )}
 
               {/* Admin Actions */}
-              <View style={styles.adminActions}>
-                {selectedPin.status !== "resolved" && (
+              <View className="mt-1 mb-2.5">
+                {(!selectedPin.status || selectedPin.status !== "resolved") && (
                   <TouchableOpacity
-                    style={[styles.adminButton, styles.resolveButton]}
+                    className="p-2.5 rounded w-full items-center bg-green-500 my-1"
                     onPress={handleMarkResolved}
                   >
-                    <Text style={styles.buttonText}>Mark Resolved</Text>
+                    <Text className="text-white font-bold">Mark Resolved</Text>
                   </TouchableOpacity>
                 )}
 
                 <TouchableOpacity
-                  style={[styles.adminButton, styles.deleteButton]}
+                  className="p-2.5 rounded w-full items-center bg-red-500 my-1"
                   onPress={handleDeletePin}
                 >
-                  <Text style={styles.buttonText}>Delete Pin</Text>
+                  <Text className="text-white font-bold">Delete Pin</Text>
                 </TouchableOpacity>
               </View>
 
               <TouchableOpacity
-                style={styles.closeButton}
+                className="bg-blue-500 p-2.5 rounded items-center mt-2.5"
                 onPress={() => setDetailModalVisible(false)}
               >
-                <Text style={styles.buttonText}>Close</Text>
+                <Text className="text-white font-bold">Close</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -440,190 +447,28 @@ const MapScreen = ({
       )}
 
       {/* Refresh button */}
-      <TouchableOpacity style={styles.refreshButton} onPress={fetchPins}>
-        <Text style={styles.refreshButtonText}>🔄</Text>
+      <TouchableOpacity
+        className="absolute bottom-5 right-5 bg-white rounded-full w-12 h-12 justify-center items-center shadow-md"
+        onPress={fetchPins}
+      >
+        <Text className="text-2xl">🔄</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.refreshButton} onPress={handleAddPin}>
-        <Text style={styles.refreshButtonText}>+</Text>
+      {/* Add button - I noticed this was previously linked to handleAddPin but should probably open the modal instead */}
+      <TouchableOpacity
+        className="absolute bottom-20 right-5 bg-white rounded-full w-12 h-12 justify-center items-center shadow-md"
+        onPress={() => {
+          if (currentUser) {
+            setAddModalVisible(true);
+          } else {
+            Alert.alert("Error", "You must be logged in to add pins");
+          }
+        }}
+      >
+        <Text className="text-2xl">+</Text>
       </TouchableOpacity>
     </View>
   );
 };
-
-// Extended Styles
-const styles = StyleSheet.create({
-  loadingContainer: {
-    position: "absolute",
-    top: 10,
-    alignSelf: "center",
-    backgroundColor: "white",
-    padding: 10,
-    borderRadius: 5,
-    elevation: 5,
-  },
-  modalContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-  },
-  modalContent: {
-    backgroundColor: "white",
-    borderRadius: 10,
-    padding: 20,
-    width: "85%",
-    maxHeight: "80%",
-    elevation: 5,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    marginBottom: 15,
-    textAlign: "center",
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 5,
-    padding: 10,
-    marginBottom: 15,
-  },
-  textArea: {
-    height: 100,
-    textAlignVertical: "top",
-  },
-  buttonContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  button: {
-    padding: 10,
-    borderRadius: 5,
-    width: "45%",
-    alignItems: "center",
-  },
-  cancelButton: {
-    backgroundColor: "#f44336",
-  },
-  addButton: {
-    backgroundColor: "#4CAF50",
-  },
-  deleteButton: {
-    backgroundColor: "#f44336",
-  },
-  resolveButton: {
-    backgroundColor: "#4CAF50",
-  },
-  closeButton: {
-    backgroundColor: "#2196F3",
-    padding: 10,
-    borderRadius: 5,
-    alignItems: "center",
-    marginTop: 10,
-  },
-  buttonText: {
-    color: "white",
-    fontWeight: "bold",
-  },
-  refreshButton: {
-    position: "absolute",
-    bottom: 20,
-    right: 20,
-    backgroundColor: "white",
-    borderRadius: 30,
-    width: 50,
-    height: 50,
-    justifyContent: "center",
-    alignItems: "center",
-    elevation: 5,
-  },
-  refreshButtonText: {
-    fontSize: 24,
-  },
-  callout: {
-    width: 200,
-    backgroundColor: "white",
-    borderRadius: 10,
-    padding: 10,
-    elevation: 5,
-  },
-  calloutTitle: {
-    fontWeight: "bold",
-    fontSize: 16,
-    marginBottom: 5,
-  },
-  calloutDescription: {
-    marginBottom: 5,
-  },
-  calloutInfo: {
-    fontSize: 12,
-    color: "#666",
-  },
-  calloutAction: {
-    marginTop: 5,
-    fontStyle: "italic",
-    fontSize: 12,
-    color: "#2196F3",
-  },
-  detailLabel: {
-    fontWeight: "bold",
-    marginTop: 10,
-    marginBottom: 3,
-  },
-  detailText: {
-    marginBottom: 10,
-  },
-  verificationContainer: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-    marginVertical: 10,
-    padding: 10,
-    backgroundColor: "#f5f5f5",
-    borderRadius: 5,
-  },
-  verificationItem: {
-    alignItems: "center",
-  },
-  verificationCount: {
-    fontSize: 20,
-    fontWeight: "bold",
-  },
-  verificationLabel: {
-    fontSize: 12,
-    color: "#666",
-  },
-  verificationActions: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginVertical: 15,
-  },
-  verifyButton: {
-    padding: 10,
-    borderRadius: 5,
-    width: "48%",
-    alignItems: "center",
-  },
-  approveButton: {
-    backgroundColor: "#4CAF50",
-  },
-  declineButton: {
-    backgroundColor: "#FF9800",
-  },
-  activeButton: {
-    opacity: 0.6,
-  },
-  adminActions: {
-    marginTop: 5,
-    marginBottom: 10,
-  },
-  adminButton: {
-    padding: 10,
-    borderRadius: 5,
-    width: "100%",
-    alignItems: "center",
-    marginVertical: 5,
-  },
-});
 
 export default MapScreen;
