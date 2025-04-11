@@ -6,11 +6,17 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  Keyboard,
 } from "react-native";
 import {} from "nativewind";
 import MapView, { Marker, Callout } from "react-native-maps";
+import * as Location from "expo-location";
 import { mapService } from "../lib/appwrite";
 import { icons } from "../constants";
+import CategoryDropdown from "./CategoryDropdown";
+import { PRESET_CATEGORIES } from "../constants/categories";
+import { useGlobalContext } from "../context/GlobalProvider";
+import AddressLookup from "./AddressLookup";
 
 const MapScreen = ({
   latitude = 37.78825,
@@ -21,37 +27,30 @@ const MapScreen = ({
   const mapRef = useRef(null);
   const [pins, setPins] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [currentUser, setCurrentUser] = useState(null);
+  const [isCreator, setIsCreator] = useState(false);
+  const { user: currentUser, loading: userLoading } = useGlobalContext();
 
   // Modals state
   const [addModalVisible, setAddModalVisible] = useState(false);
+  const [addressModalVisible, setAddressModalVisible] = useState(false);
   const [detailModalVisible, setDetailModalVisible] = useState(false);
 
   // Form data
   const [newPinCoords, setNewPinCoords] = useState(null);
   const [pinTitle, setPinTitle] = useState("");
   const [pinDescription, setPinDescription] = useState("");
+  const [currAddress, setCurrAddress] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState(null);
 
   // Selected pin for detail view
   const [selectedPin, setSelectedPin] = useState(null);
 
   // Fetch user and pins on component mount
   useEffect(() => {
-    const initializeData = async () => {
-      try {
-        // Get current user
-        const user = await mapService.getCurrentUser();
-        setCurrentUser(user);
-
-        // Get all pins
-        await fetchPins();
-      } catch (error) {
-        console.error("Error initializing data:", error);
-      }
-    };
-
-    initializeData();
-  }, []);
+    if (currentUser) {
+      fetchPins();
+    }
+  }, [currentUser]);
 
   // Animate to new region when coordinates change
   useEffect(() => {
@@ -67,6 +66,27 @@ const MapScreen = ({
       );
     }
   }, [latitude, longitude, latitudeDelta, longitudeDelta]);
+
+  // Add an effect to check permissions when a pin is selected
+  useEffect(() => {
+    const checkPermissions = async () => {
+      if (selectedPin && currentUser) {
+        try {
+          // Check if user is the creator or has admin rights
+          const isCreator =
+            selectedPin.userId === currentUser.$id ||
+            currentUser.isAdmin ||
+            (await mapService.canDeletePin(selectedPin.$id));
+          setIsCreator(isCreator);
+        } catch (error) {
+          console.error("Error checking permissions:", error);
+          setIsCreator(false);
+        }
+      }
+    };
+
+    checkPermissions();
+  }, [selectedPin, currentUser]);
 
   // Fetch pins from Appwrite
   const fetchPins = async () => {
@@ -94,10 +114,11 @@ const MapScreen = ({
     const { coordinate } = event.nativeEvent;
     setNewPinCoords(coordinate);
     setAddModalVisible(true);
+    setAddressModalVisible(false);
   };
 
   const handleAddressSubmit = async () => {
-    if (!address.trim()) {
+    if (!currAddress.trim()) {
       Alert.alert("Error", "Please enter an address");
       return;
     }
@@ -107,14 +128,18 @@ const MapScreen = ({
 
     try {
       // Geocode the address
-      const results = await Location.geocodeAsync(address);
+      const results = await Location.geocodeAsync(currAddress);
 
       if (results.length > 0) {
-        setNewPinCoords({
-          ...newPinCoords,
+        const newCoords = {
           latitude: results[0].latitude,
           longitude: results[0].longitude,
-        });
+        };
+
+        setNewPinCoords(newCoords);
+
+        // Now we need to keep the modal open but switch to pin details
+        setAddressModalVisible(false);
       } else {
         Alert.alert("Not Found", "Could not find the location you entered");
       }
@@ -129,19 +154,31 @@ const MapScreen = ({
   // Add a new pin to the database
   const handleAddPin = async () => {
     if (!newPinCoords) return;
+    if (!pinTitle.trim()) {
+      Alert.alert("Error", "Please enter a title");
+      return;
+    }
+    if (!selectedCategory) {
+      Alert.alert("Error", "Please select a category");
+      return;
+    }
 
     try {
       await mapService.addPin(
         newPinCoords.latitude,
         newPinCoords.longitude,
         pinTitle,
-        pinDescription
+        selectedCategory.id,
+        selectedCategory.name,
+        pinDescription,
+        currentUser.$id
       );
-
       // Clear form data
       setPinTitle("");
       setPinDescription("");
       setAddModalVisible(false);
+      setCurrAddress("");
+      setSelectedCategory(null);
 
       // Refresh pins
       fetchPins();
@@ -160,14 +197,14 @@ const MapScreen = ({
   };
 
   // Check if current user has already approved this pin
-  const hasUserApproved = (pin) => {
+  const hasUserConfirmed = (pin) => {
     return (
       currentUser && pin.approvals && pin.approvals.includes(currentUser.$id)
     );
   };
 
   // Handle pin approval
-  const handleApprovePin = async () => {
+  const handleAgreePin = async () => {
     if (!selectedPin || !currentUser) return;
 
     try {
@@ -190,14 +227,14 @@ const MapScreen = ({
       if (!canDelete) {
         Alert.alert(
           "Insufficient Permissions",
-          "You need to be the creator or have 2+ approvals to delete this pin"
+          "You need to be the creator or have 2+ confirmations to delete this pin"
         );
         return;
       }
 
       Alert.alert(
         "Confirm Deletion",
-        "Are you sure you want to delete this pin?",
+        "Are you sure you want to resolve and delete this pin?",
         [
           { text: "Cancel", style: "cancel" },
           {
@@ -214,20 +251,6 @@ const MapScreen = ({
       );
     } catch (error) {
       Alert.alert("Error", error.message || "Failed to delete pin");
-    }
-  };
-
-  // Handle marking pin as resolved
-  const handleMarkResolved = async () => {
-    if (!selectedPin || !currentUser) return;
-
-    try {
-      await mapService.markPinAsResolved(selectedPin.$id);
-      const updatedPins = await fetchPins();
-      const updatedPin = updatedPins.find((p) => p.$id === selectedPin.$id);
-      setSelectedPin(updatedPin);
-    } catch (error) {
-      Alert.alert("Error", error.message || "Failed to mark pin as resolved");
     }
   };
 
@@ -293,9 +316,13 @@ const MapScreen = ({
                 <Text className="text-xs text-gray-600">
                   Status: {formatStatus(pin.status)}
                 </Text>
-                <Text className="text-xs text-gray-600">
-                  Approvals: {pin.approvals ? pin.approvals.length : 0}
-                </Text>
+                {pin.approvals && pin.approvals.length > 1 ? (
+                  <Text className="text-xs text-gray-600">
+                    {pin.approvals.length} People Agree
+                  </Text>
+                ) : (
+                  ""
+                )}
                 <Text className="mt-1 italic text-xs text-blue-500">
                   Tap for more details
                 </Text>
@@ -331,22 +358,39 @@ const MapScreen = ({
               value={pinTitle}
               onChangeText={setPinTitle}
             />
-            <TextInput
-              className="border border-white rounded p-2.5 mb-4 text-white"
-              placeholder="Address"
-              placeholderTextColor="gray"
-              value={newPinCoords}
-              onChangeText={setPinTitle}
+            {/* Category dropdown and other pin details */}
+            <CategoryDropdown
+              categories={PRESET_CATEGORIES}
+              selectedCategory={selectedCategory}
+              onSelectCategory={setSelectedCategory}
+              placeholder="Select a category"
+            />
+            <AddressLookup
+              value={currAddress}
+              onChangeText={setCurrAddress}
+              onSelectAddress={(addressData) => {
+                setNewPinCoords({
+                  latitude: addressData.latitude,
+                  longitude: addressData.longitude,
+                });
+                setCurrAddress(addressData.address);
+                setAddressModalVisible(false);
+              }}
+              onCancel={() => setAddressModalVisible(false)}
+              label="Search for an address"
+              placeholder="Enter an address to add pin"
+              containerStyle="mb-4"
             />
             <TextInput
               className="border border-white rounded p-2.5 mb-4 h-24 text-white"
-              placeholder="Pin Description"
+              placeholder="Describe The Issue"
               placeholderTextColor="gray"
               value={pinDescription}
               onChangeText={setPinDescription}
               multiline
               textAlignVertical="top"
             />
+
             <View className="flex-row justify-between">
               <TouchableOpacity
                 className="p-2.5 rounded bg-secondary w-5/12 items-center"
@@ -354,6 +398,7 @@ const MapScreen = ({
               >
                 <Text className="text-white font-bold">Cancel</Text>
               </TouchableOpacity>
+
               <TouchableOpacity
                 className="p-2.5 rounded bg-secondary w-5/12 items-center"
                 onPress={handleAddPin}
@@ -395,45 +440,46 @@ const MapScreen = ({
                 </View>
               </View>
 
-              {/* Verification Actions */}
-              {currentUser && currentUser.$id !== selectedPin.userId && (
-                <View className="flex-row justify-between my-4">
-                  <TouchableOpacity
-                    className={`p-2.5 rounded w-5/12 items-center ${
-                      hasUserApproved(selectedPin)
-                        ? "bg-green-500/60"
-                        : "bg-green-500"
-                    }`}
-                    onPress={handleApprovePin}
-                    disabled={hasUserApproved(selectedPin)}
-                  >
-                    <Text className="text-white font-bold">
-                      {hasUserApproved(selectedPin)
-                        ? "Approved"
-                        : "Still There"}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-
-              {/* Admin Actions */}
-              <View className="mt-1 mb-2.5">
-                {(!selectedPin.status || selectedPin.status !== "resolved") && (
+              {/* Admin Actions vs Viewer Actions */}
+              {isCreator ? (
+                <View className="mt-1 mb-2.5">
                   <TouchableOpacity
                     className="p-2.5 rounded w-full items-center bg-green-500 my-1"
-                    onPress={handleMarkResolved}
+                    onPress={handleDeletePin}
                   >
                     <Text className="text-white font-bold">Mark Resolved</Text>
                   </TouchableOpacity>
-                )}
-
-                <TouchableOpacity
-                  className="p-2.5 rounded w-full items-center bg-red-500 my-1"
-                  onPress={handleDeletePin}
-                >
-                  <Text className="text-white font-bold">Delete Pin</Text>
-                </TouchableOpacity>
-              </View>
+                </View>
+              ) : (
+                <View className="flex-row justify-between my-4">
+                  <TouchableOpacity
+                    className={`p-2.5 rounded w-5/12 items-center ${
+                      hasUserConfirmed(selectedPin)
+                        ? "bg-green-200"
+                        : "bg-green-500"
+                    }`}
+                    onPress={handleAgreePin}
+                    disabled={hasUserConfirmed(selectedPin)}
+                  >
+                    <Text className="text-white font-bold">
+                      {hasUserConfirmed(selectedPin)
+                        ? "Approved"
+                        : "It's Still There"}
+                    </Text>
+                  </TouchableOpacity>
+                  {/* <TouchableOpacity
+                    className={`p-2.5 rounded w-5/12 items-center ${
+                      hasUserConfirmed(selectedPin)
+                        ? "bg-green-200"
+                        : "bg-red-500"
+                    }`}
+                    onPress={handleAgreePin}
+                    disabled={hasUserConfirmed(selectedPin)}
+                  >
+                    <Text className="text-white font-bold">It's Gone</Text>
+                  </TouchableOpacity> */}
+                </View>
+              )}
 
               <TouchableOpacity
                 className="bg-blue-500 p-2.5 rounded items-center mt-2.5"
@@ -454,12 +500,13 @@ const MapScreen = ({
         <Text className="text-2xl">🔄</Text>
       </TouchableOpacity>
 
-      {/* Add button - I noticed this was previously linked to handleAddPin but should probably open the modal instead */}
+      {/* Add button */}
       <TouchableOpacity
         className="absolute bottom-20 right-5 bg-white rounded-full w-12 h-12 justify-center items-center shadow-md"
         onPress={() => {
           if (currentUser) {
             setAddModalVisible(true);
+            setAddressModalVisible(true);
           } else {
             Alert.alert("Error", "You must be logged in to add pins");
           }

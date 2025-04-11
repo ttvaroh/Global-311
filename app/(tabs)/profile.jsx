@@ -27,23 +27,94 @@ const Profile = () => {
     try {
       setLoading(true);
 
+      // Get all pins from the service
       const allPins = await mapService.getAllPins();
       console.log("Total pins fetched:", allPins.length);
 
-      // Create debug info to help us understand the data structure
-      const debugData = {
-        userId: user.$id,
-        totalPins: allPins.length,
-        pinFields: allPins.length > 0 ? Object.keys(allPins[0]) : [],
-        samplePin: allPins.length > 0 ? allPins[0] : null,
+      // The probable field that contains user ID information
+      // Based on your initial code, these are the fields we should check
+      const ownerFields = ["userId"];
+      console.log("User in profile screen:", JSON.stringify(user, null, 2));
+
+      // Function to check if a pin belongs to the current user
+      const isPinFromCurrentUser = (pin) => {
+        const currentUserId = String(user.$id);
+
+        // Log the actual values for debugging
+        console.log("Comparing:", {
+          pin: pin.$id,
+          pinUserId: pin.userId,
+          currentUserId: currentUserId,
+        });
+
+        // Try multiple formats of the user ID
+        const possibleUserIds = [
+          String(user.$id),
+          String(user.id),
+          String(user._id),
+          user.$id,
+          user.id,
+          user._id,
+        ].filter(Boolean); // Filter out undefined values
+
+        // Check each potential ownership field with each potential ID format
+        for (const field of ownerFields) {
+          if (pin[field]) {
+            for (const possibleId of possibleUserIds) {
+              if (String(pin[field]) === String(possibleId)) {
+                console.log(`Match found! Field: ${field}, ID: ${possibleId}`);
+                return true;
+              }
+            }
+          }
+        }
+
+        return false;
       };
 
-      console.log("Debug data:", JSON.stringify(debugData, null, 2));
-      setDebugInfo(debugData);
+      // Filter pins to only include those belonging to the current user
+      const userPins = allPins.filter((pin) => {
+        console.log("Comparing pin:", {
+          pinId: pin.$id,
+          pinUserId: pin.userId,
+          currentUserId: user.$id,
+          matches: String(pin.userId) === String(user.$id),
+        });
+        return isPinFromCurrentUser(pin);
+      });
 
-      // For now, show all pins so we can see what's available
-      setPins(allPins);
-      return allPins;
+      console.log(
+        `Filtered ${allPins.length} pins to ${userPins.length} user pins`
+      );
+
+      // If we found no pins, log more info for debugging
+      if (userPins.length === 0 && allPins.length > 0) {
+        console.log(
+          "DEBUGGING: No user pins found. Checking pin ownership fields:"
+        );
+        allPins.forEach((pin, index) => {
+          if (index < 5) {
+            // Just log first 5 pins to avoid console spam
+            console.log(`Pin ID: ${pin.$id}`);
+            ownerFields.forEach((field) => {
+              console.log(`  ${field}: ${pin[field] || "not set"}`);
+            });
+            console.log(`  Current user ID: ${user.$id}`);
+          }
+        });
+      }
+
+      // Set pins state to only the user's pins
+      setPins(userPins);
+
+      // Store debug info for troubleshooting
+      setDebugInfo({
+        userId: user.$id,
+        totalPins: allPins.length,
+        userPins: userPins.length,
+      });
+
+      return userPins;
     } catch (error) {
       console.error("Error fetching pins:", error);
       Alert.alert("Error", "Failed to load pins: " + error.message);
@@ -69,13 +140,9 @@ const Profile = () => {
   };
 
   const showDebugInfo = () => {
-    const message = JSON.stringify(debugInfo, null, 2);
-    console.log("Debug Info:", message);
     Alert.alert(
       "Debug Info",
-      `User ID: ${user.$id}\nTotal Pins: ${
-        debugInfo.totalPins
-      }\nPin Fields: ${debugInfo.pinFields?.join(", ")}`
+      `User ID: ${user.$id}\nTotal Pins in System: ${debugInfo.totalPins}\nYour Pins: ${debugInfo.userPins}\n\nIf your pins aren't showing correctly, check the console logs for detailed information.`
     );
   };
 
@@ -108,54 +175,20 @@ const Profile = () => {
           <Text className="text-white text-sm opacity-80">
             Approvals: {pin.approvals?.length || 0}
           </Text>
-          {/* Display who created this pin - helpful for debugging */}
-          {pin.userId && (
-            <Text className="text-white text-sm opacity-80">
-              User: {pin.userId}
-            </Text>
-          )}
-          {pin.creator && (
-            <Text className="text-white text-sm opacity-80">
-              Creator: {pin.creator}
-            </Text>
-          )}
-          {pin.createdBy && (
-            <Text className="text-white text-sm opacity-80">
-              By: {pin.createdBy}
-            </Text>
-          )}
         </View>
       </View>
-      {/* Add a button to check if this pin belongs to current user */}
-      <TouchableOpacity
-        className="mt-2 bg-primary p-2 rounded"
-        onPress={() => {
-          const isCurrentUser =
-            pin.userId === user.$id ||
-            pin.creator === user.$id ||
-            pin.createdBy === user.$id;
-          Alert.alert(
-            "Pin Details",
-            `ID: ${pin.$id}\nIs yours: ${
-              isCurrentUser ? "Yes" : "No"
-            }\nYour ID: ${user.$id}`
-          );
-        }}
-      >
-        <Text className="text-white text-center">Check Ownership</Text>
-      </TouchableOpacity>
     </TouchableOpacity>
   );
 
   return (
     <SafeAreaView className="bg-primary h-full">
       <View className="flex-row justify-between items-center px-4 py-2 bg-secondary">
-        <Text className="text-white font-bold">Debug Mode</Text>
+        <Text className="text-white font-bold">My Pins ({pins.length})</Text>
         <TouchableOpacity
           className="bg-primary px-3 py-1 rounded"
           onPress={showDebugInfo}
         >
-          <Text className="text-white">Show Pin Data</Text>
+          <Text className="text-white">Debug</Text>
         </TouchableOpacity>
       </View>
 
@@ -168,7 +201,7 @@ const Profile = () => {
         ListEmptyComponent={() => (
           <EmptyState
             title="No Pins Found"
-            subtitle="No pins found in the database"
+            subtitle="Create some pins on the map to see them here"
           />
         )}
         ListHeaderComponent={() => (

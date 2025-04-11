@@ -3,18 +3,12 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { FlatList, Image, RefreshControl, Text, View } from "react-native";
 
 import { images } from "../../constants";
-import useAppwrite from "../../lib/useAppwrite";
-import {
-  getAllPosts,
-  getCurrentUser,
-  getLatestPosts,
-} from "../../lib/appwrite";
+
 import { EmptyState, SearchInput, Trending, VideoCard } from "../../components";
 import GlobalProvider, { useGlobalContext } from "../../context/GlobalProvider";
+import { PRESET_CATEGORIES } from "../../constants/categories";
 
 const Home = () => {
-  const { data: posts, refetch } = useAppwrite(getAllPosts);
-  const { data: latestPosts } = useAppwrite(getLatestPosts);
   const { user, loading } = useGlobalContext();
 
   const [refreshing, setRefreshing] = useState(false);
@@ -34,17 +28,17 @@ const Home = () => {
   return (
     <SafeAreaView className="bg-primary h-full">
       <FlatList
-        data={posts}
-        keyExtractor={(item) => item.$id}
-        renderItem={({ item }) => (
-          <VideoCard
-            title={item.title}
-            thumbnail={item.thumbnail}
-            video={item.video}
-            creator={item.creator.username}
-            avatar={item.creator.avatar}
-          />
-        )}
+        data={PRESET_CATEGORIES}
+        keyExtractor={(item) => item.id}
+        // renderItem={({ item }) => (
+        //   <VideoCard
+        //     title={item.title}
+        //     thumbnail={item.thumbnail}
+        //     video={item.video}
+        //     creator={item.creator.username}
+        //     avatar={item.creator.avatar}
+        //   />
+        // )}
         ListHeaderComponent={() => (
           <View className="flex my-6 px-4 space-y-6">
             <View className="flex justify-between items-start flex-row mb-6">
@@ -73,7 +67,7 @@ const Home = () => {
                 Latest Videos
               </Text>
 
-              <Trending posts={latestPosts ?? []} />
+              {/* <Trending posts={latestPosts ?? []} /> */}
             </View>
           </View>
         )}
