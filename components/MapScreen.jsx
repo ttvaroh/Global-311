@@ -105,7 +105,7 @@ const MapScreen = ({
   };
 
   // Handle long press on map to add a new pin
-  const handleLongPress = (event) => {
+  const handleLongPress = async (event) => {
     if (!currentUser) {
       Alert.alert("Error", "You must be logged in to add pins");
       return;
@@ -113,42 +113,26 @@ const MapScreen = ({
 
     const { coordinate } = event.nativeEvent;
     setNewPinCoords(coordinate);
-    setAddModalVisible(true);
-    setAddressModalVisible(false);
-  };
-
-  const handleAddressSubmit = async () => {
-    if (!currAddress.trim()) {
-      Alert.alert("Error", "Please enter an address");
-      return;
-    }
-
-    Keyboard.dismiss();
-    setLoading(true);
 
     try {
-      // Geocode the address
-      const results = await Location.geocodeAsync(currAddress);
-
-      if (results.length > 0) {
-        const newCoords = {
-          latitude: results[0].latitude,
-          longitude: results[0].longitude,
-        };
-
-        setNewPinCoords(newCoords);
-
-        // Now we need to keep the modal open but switch to pin details
-        setAddressModalVisible(false);
+      const [reverseGeocoded] = await Location.reverseGeocodeAsync(coordinate);
+      if (reverseGeocoded) {
+        const formattedAddress = `${reverseGeocoded.name || ""} ${
+          reverseGeocoded.street || ""
+        }, ${reverseGeocoded.city || reverseGeocoded.region || ""}, ${
+          reverseGeocoded.postalCode || ""
+        }`.trim();
+        setCurrAddress(formattedAddress);
       } else {
-        Alert.alert("Not Found", "Could not find the location you entered");
+        setCurrAddress("Address not found");
       }
     } catch (error) {
-      console.log("Error geocoding address:", error);
-      Alert.alert("Error", "Failed to search for this address");
-    } finally {
-      setLoading(false);
+      console.error("Reverse geocoding error:", error);
+      setCurrAddress("Address not found");
     }
+
+    setAddModalVisible(true);
+    setAddressModalVisible(false);
   };
 
   // Add a new pin to the database
@@ -168,9 +152,9 @@ const MapScreen = ({
         newPinCoords.latitude,
         newPinCoords.longitude,
         pinTitle,
+        pinDescription,
         selectedCategory.id,
         selectedCategory.name,
-        pinDescription,
         currentUser.$id
       );
       // Clear form data
@@ -351,6 +335,21 @@ const MapScreen = ({
             <Text className="text-lg font-bold mb-4 text-center text-white">
               Add New Pin
             </Text>
+            <AddressLookup
+              value={currAddress}
+              onChangeText={setCurrAddress}
+              onSelectAddress={(addressData) => {
+                setNewPinCoords({
+                  latitude: addressData.latitude,
+                  longitude: addressData.longitude,
+                });
+                setCurrAddress(addressData.address);
+                setAddressModalVisible(false);
+              }}
+              label="Search for an address"
+              placeholder="Enter an address to add pin"
+              containerStyle="mb-4"
+            />
             <TextInput
               className="border border-white rounded p-2.5 mb-4 text-white"
               placeholder="Pin Title"
@@ -364,22 +363,6 @@ const MapScreen = ({
               selectedCategory={selectedCategory}
               onSelectCategory={setSelectedCategory}
               placeholder="Select a category"
-            />
-            <AddressLookup
-              value={currAddress}
-              onChangeText={setCurrAddress}
-              onSelectAddress={(addressData) => {
-                setNewPinCoords({
-                  latitude: addressData.latitude,
-                  longitude: addressData.longitude,
-                });
-                setCurrAddress(addressData.address);
-                setAddressModalVisible(false);
-              }}
-              onCancel={() => setAddressModalVisible(false)}
-              label="Search for an address"
-              placeholder="Enter an address to add pin"
-              containerStyle="mb-4"
             />
             <TextInput
               className="border border-white rounded p-2.5 mb-4 h-24 text-white"

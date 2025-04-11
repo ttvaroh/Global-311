@@ -17,14 +17,11 @@ const AddressLookup = forwardRef(
       onSelectAddress,
       placeholder = "Search for an address or place",
       label = "Enter Location",
-      showCancelButton = true,
-      onCancel,
       containerStyle,
       inputStyle,
       errorStyle,
       listContainerStyle,
-      buttonStyle,
-      buttonTextStyle,
+      needSuggestions = true,
       ...textInputProps
     },
     ref
@@ -33,6 +30,7 @@ const AddressLookup = forwardRef(
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState(null);
     const [debounceTimeout, setDebounceTimeout] = useState(null);
+    const [justSelected, setJustSelected] = useState(false);
 
     // Fetch address suggestions from Nominatim (OpenStreetMap)
     const fetchNominatimSuggestions = async (query) => {
@@ -86,13 +84,18 @@ const AddressLookup = forwardRef(
 
     // Debounce the address input to avoid excessive API calls
     useEffect(() => {
+      if (justSelected) {
+        setJustSelected(false); // reset for next time
+        return;
+      }
+
       if (debounceTimeout) {
         clearTimeout(debounceTimeout);
       }
 
       const timeout = setTimeout(() => {
         fetchNominatimSuggestions(value);
-      }, 500); // Wait 500ms after user stops typing
+      }, 500);
 
       setDebounceTimeout(timeout);
 
@@ -106,6 +109,7 @@ const AddressLookup = forwardRef(
     // Handle selection of an address from suggestions
     const handleSelectAddress = (address) => {
       Keyboard.dismiss();
+      setJustSelected(true); // prevent next fetch
       onChangeText(address.formattedAddress);
       setSuggestions([]);
       if (onSelectAddress) {
@@ -215,7 +219,7 @@ const AddressLookup = forwardRef(
           <ActivityIndicator size="small" color="#ffffff" className="my-2" />
         ) : null}
 
-        {suggestions.length > 0 && (
+        {needSuggestions && suggestions.length > 0 && (
           <View
             className={`border border-gray-600 rounded mb-4 max-h-48 ${
               listContainerStyle || ""
